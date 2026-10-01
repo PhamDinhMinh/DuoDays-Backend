@@ -44,8 +44,12 @@ src/
     swagger/         @ApiErrorResponses()
   database/          DatabaseModule (Mongoose), TransactionService
   logging/           nestjs-pino: request ids, redaction, LOG_DESTINATION
-  health/            GET /health (version-neutral, unthrottled)
-  modules/<feature>/ (from Phase 1) controller → service → Mongoose model; DTOs in dto/
+  health/            GET /health (version-neutral, unthrottled, @Public)
+  modules/
+    users/           User schema, UsersService, UserDto/toUserDto, normalizeEmail
+    auth/            register/login/refresh/logout/me; PasswordHasher (Argon2id),
+                     AccessTokenService (JWT), AuthSessionsService (refresh sessions),
+                     JwtAuthGuard (global), @Public(), @CurrentUser()
 test/
   support/           global-setup (in-memory replica set), test-app factory, ProbeModule
   *.e2e-spec.ts
@@ -103,6 +107,24 @@ test/
 - Use Nest `Logger` (backed by pino). Logs are JSON in production, pretty in development.
 - Never log request bodies, tokens, passwords or invite codes. Redaction (`logger-options.ts`)
   is a safety net, not a licence; add new sensitive field names to `SENSITIVE_KEYS`.
+
+### Auth
+
+- **Every route requires a valid access token unless marked `@Public()`.** The global
+  `JwtAuthGuard` runs after the throttler. Never weaken this default.
+- In protected handlers take `@CurrentUser() auth: AuthContext` (`{ userId: 'usr_…',
+sessionId: 'ses_…' }`) and resolve the user via `UsersService.findByPublicId`. Never accept a
+  user id from the body/path for "who am I".
+- Passwords are used exactly as received: never trim, case-fold or Unicode-normalize them.
+  Hash only via `PasswordHasher`; never hash inside a transaction callback (it may retry).
+- Never store raw refresh tokens or access tokens. Refresh-session changes are single
+  conditional updates in `AuthSessionsService` – keep rotation a compare-and-swap.
+- Never log emails, passwords, hashes, tokens or the Authorization header – log `usr_`/`ses_`
+  ids and outcome codes only.
+- Access tokens are stateless (no DB lookup); revocation takes effect at the next refresh,
+  i.e. within `JWT_ACCESS_TTL`.
+- Per-route limits live in `AUTH_THROTTLE`; e2e tests that create many users pass
+  `createTestApp({ throttling: false })`.
 
 ### API
 

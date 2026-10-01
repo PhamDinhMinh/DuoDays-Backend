@@ -3,12 +3,36 @@ import { z } from 'zod';
 /*
  * The process environment, validated once at startup. A missing or malformed value stops
  * the app before it listens. Only variables a shipped phase actually reads belong here –
- * auth and invite settings are added with their phases.
+ * invite settings are added with their phase.
  */
 
 const booleanString = z
   .enum(['true', 'false'], { error: 'must be "true" or "false"' })
   .transform(value => value === 'true');
+
+const TTL_UNIT_SECONDS = { s: 1, m: 60, h: 3600 } as const;
+
+/** `"15m"` → 900. Accepts `<n>s`, `<n>m` or `<n>h`. */
+const durationSeconds = z
+  .string()
+  .trim()
+  .regex(/^\d+[smh]$/, { error: 'must look like "90s", "15m" or "1h"' })
+  .transform(value => {
+    const unit = value.slice(-1) as keyof typeof TTL_UNIT_SECONDS;
+    return Number(value.slice(0, -1)) * TTL_UNIT_SECONDS[unit];
+  });
+
+/** At least 32 characters – e.g. 32 random bytes base64url-encoded (43 chars). */
+const secret = z
+  .string({ error: 'is required' })
+  .min(32, { error: 'must be at least 32 characters' });
+
+const days = (max: number) =>
+  z.coerce
+    .number({ error: 'must be a number' })
+    .int({ error: 'must be a whole number' })
+    .min(1, { error: `must be between 1 and ${max}` })
+    .max(max, { error: `must be between 1 and ${max}` });
 
 const positiveInt = z.coerce
   .number({ error: 'must be a number' })
@@ -41,8 +65,36 @@ export const envSchema = z
 
     THROTTLE_TTL_SECONDS: positiveInt.default(60),
     THROTTLE_LIMIT: positiveInt.default(100),
+
+    JWT_ACCESS_SECRET: secret,
+    /** Seconds after transform. */
+    JWT_ACCESS_TTL: durationSeconds
+      .refine(seconds => seconds >= 60 && seconds <= 3600, {
+        error: 'must be between 1 minute and 1 hour',
+      })
+      .prefault('15m'),
+    JWT_ISSUER: z.string().trim().min(1, { error: 'must not be empty' }).default('duodays-api'),
+    JWT_AUDIENCE: z.string().trim().min(1, { error: 'must not be empty' }).default('duodays-app'),
+
+    REFRESH_TOKEN_PEPPER: secret,
+    REFRESH_TOKEN_TTL_DAYS: days(365).default(30),
+    REFRESH_TOKEN_ABSOLUTE_TTL_DAYS: days(730).default(180),
   })
   .superRefine((env, ctx) => {
+    if (env.REFRESH_TOKEN_PEPPER === env.JWT_ACCESS_SECRET) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['REFRESH_TOKEN_PEPPER'],
+        message: 'must differ from JWT_ACCESS_SECRET',
+      });
+    }
+    if (env.REFRESH_TOKEN_ABSOLUTE_TTL_DAYS < env.REFRESH_TOKEN_TTL_DAYS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['REFRESH_TOKEN_ABSOLUTE_TTL_DAYS'],
+        message: 'must be at least REFRESH_TOKEN_TTL_DAYS',
+      });
+    }
     // Automated tests run against mongodb-memory-server only – never a shared Atlas cluster.
     if (env.NODE_ENV === 'test' && env.MONGODB_URI.startsWith('mongodb+srv://')) {
       ctx.addIssue({

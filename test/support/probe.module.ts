@@ -4,6 +4,7 @@ import { IsDefined, IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-valid
 import { AppException } from '../../src/common/errors/app.exception.js';
 import { ErrorCode } from '../../src/common/errors/error-codes.js';
 import { ValidationKey } from '../../src/common/validation/validation-keys.js';
+import { Public } from '../../src/modules/auth/decorators/public.decorator.js';
 
 /*
  * Test-only routes that exercise the global infrastructure (validation, errors, logging,
@@ -21,6 +22,7 @@ export class ProbeDto {
   name: string;
 }
 
+@Public()
 @Controller('__probe')
 class ProbeController {
   private readonly logger = new Logger('Probe');

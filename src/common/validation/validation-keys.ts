@@ -7,6 +7,8 @@ export const ValidationKey = {
   required: 'required',
   invalidEmail: 'invalidEmail',
   passwordTooShort: 'passwordTooShort',
+  /** Backend-only so far: the app has no maximum yet. */
+  passwordTooLong: 'passwordTooLong',
   nameTooLong: 'nameTooLong',
   invalidDate: 'invalidDate',
   /** Any other rule violation (wrong type, out of range, bad format…). */

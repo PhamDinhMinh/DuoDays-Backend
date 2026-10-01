@@ -6,6 +6,8 @@ const valid = {
   NODE_ENV: 'development',
   MONGODB_URI: 'mongodb+srv://user:pa55word@cluster0.example.mongodb.net',
   MONGODB_DB_NAME: 'duodays_dev',
+  JWT_ACCESS_SECRET: 'a'.repeat(43),
+  REFRESH_TOKEN_PEPPER: 'b'.repeat(43),
 };
 
 function issuesOf(raw: Record<string, unknown>): string[] {
@@ -31,6 +33,13 @@ describe('validateEnv', () => {
       MONGODB_DB_NAME: 'duodays_dev',
       THROTTLE_TTL_SECONDS: 60,
       THROTTLE_LIMIT: 100,
+      JWT_ACCESS_SECRET: valid.JWT_ACCESS_SECRET,
+      JWT_ACCESS_TTL: 900,
+      JWT_ISSUER: 'duodays-api',
+      JWT_AUDIENCE: 'duodays-app',
+      REFRESH_TOKEN_PEPPER: valid.REFRESH_TOKEN_PEPPER,
+      REFRESH_TOKEN_TTL_DAYS: 30,
+      REFRESH_TOKEN_ABSOLUTE_TTL_DAYS: 180,
     });
   });
 
@@ -92,5 +101,57 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...valid, NODE_ENV: 'test', MONGODB_URI: 'mongodb://127.0.0.1:27017' }),
     ).not.toThrow();
+  });
+
+  describe('auth settings', () => {
+    it('requires both secrets', () => {
+      const { JWT_ACCESS_SECRET: _a, REFRESH_TOKEN_PEPPER: _b, ...rest } = valid;
+      const issues = issuesOf(rest);
+      expect(issues).toContain('JWT_ACCESS_SECRET is required');
+      expect(issues).toContain('REFRESH_TOKEN_PEPPER is required');
+    });
+
+    it('rejects short secrets without echoing them', () => {
+      const issues = issuesOf({ ...valid, JWT_ACCESS_SECRET: 'short-secret-value' });
+      expect(issues).toEqual(['JWT_ACCESS_SECRET must be at least 32 characters']);
+      expect(issues.join()).not.toContain('short-secret-value');
+    });
+
+    it('rejects a pepper equal to the JWT secret', () => {
+      expect(issuesOf({ ...valid, REFRESH_TOKEN_PEPPER: valid.JWT_ACCESS_SECRET })).toEqual([
+        'REFRESH_TOKEN_PEPPER must differ from JWT_ACCESS_SECRET',
+      ]);
+    });
+
+    it.each([
+      ['90s', 90],
+      ['1m', 60],
+      ['15m', 900],
+      ['1h', 3600],
+    ])('parses JWT_ACCESS_TTL=%s as %i seconds', (ttl, seconds) => {
+      expect(validateEnv({ ...valid, JWT_ACCESS_TTL: ttl }).JWT_ACCESS_TTL).toBe(seconds);
+    });
+
+    it.each(['59s', '61m', '2h', '15', '15 m', 'm15', '1d'])('rejects JWT_ACCESS_TTL=%s', ttl => {
+      expect(
+        issuesOf({ ...valid, JWT_ACCESS_TTL: ttl }).some(i => i.startsWith('JWT_ACCESS_TTL ')),
+      ).toBe(true);
+    });
+
+    it('rejects an absolute session lifetime shorter than the idle lifetime', () => {
+      expect(
+        issuesOf({ ...valid, REFRESH_TOKEN_TTL_DAYS: '60', REFRESH_TOKEN_ABSOLUTE_TTL_DAYS: '30' }),
+      ).toEqual(['REFRESH_TOKEN_ABSOLUTE_TTL_DAYS must be at least REFRESH_TOKEN_TTL_DAYS']);
+    });
+
+    it.each([
+      ['REFRESH_TOKEN_TTL_DAYS', '0'],
+      ['REFRESH_TOKEN_TTL_DAYS', '366'],
+      ['REFRESH_TOKEN_ABSOLUTE_TTL_DAYS', '731'],
+      ['JWT_ISSUER', '  '],
+      ['JWT_AUDIENCE', ''],
+    ])('rejects %s=%p', (key, value) => {
+      expect(issuesOf({ ...valid, [key]: value }).some(i => i.startsWith(`${key} `))).toBe(true);
+    });
   });
 });

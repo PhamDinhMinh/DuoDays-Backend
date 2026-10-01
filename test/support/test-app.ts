@@ -3,10 +3,12 @@ import { Writable } from 'node:stream';
 
 import { getConnectionToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
+import { getStorageToken } from '@nestjs/throttler';
 import mongoose from 'mongoose';
 import { inject, vi } from 'vitest';
 
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import type { ThrottlerStorage } from '@nestjs/throttler';
 import type { Connection } from 'mongoose';
 
 export interface TestAppOptions {
@@ -14,7 +16,23 @@ export interface TestAppOptions {
   env?: Record<string, string | undefined>;
   /** Capture log output instead of discarding it. */
   logs?: LogCapture;
+  /**
+   * `false` disables rate limiting (the per-route auth limits would otherwise trip in
+   * tests that create many users). Throttling tests leave it on.
+   */
+  throttling?: boolean;
 }
+
+/** Fixed test secrets – never real ones. */
+export const TEST_JWT_SECRET = 'test-jwt-secret-0123456789abcdefghijklmnop';
+export const TEST_REFRESH_PEPPER = 'test-refresh-pepper-0123456789abcdefghijkl';
+export const TEST_JWT_ISSUER = 'duodays-api-test';
+export const TEST_JWT_AUDIENCE = 'duodays-app-test';
+
+const unlimitedStorage: ThrottlerStorage = {
+  increment: () =>
+    Promise.resolve({ totalHits: 1, timeToExpire: 0, isBlocked: false, timeToBlockExpire: 0 }),
+};
 
 const ENV_KEYS = [
   'NODE_ENV',
@@ -25,6 +43,13 @@ const ENV_KEYS = [
   'MONGODB_DB_NAME',
   'THROTTLE_TTL_SECONDS',
   'THROTTLE_LIMIT',
+  'JWT_ACCESS_SECRET',
+  'JWT_ACCESS_TTL',
+  'JWT_ISSUER',
+  'JWT_AUDIENCE',
+  'REFRESH_TOKEN_PEPPER',
+  'REFRESH_TOKEN_TTL_DAYS',
+  'REFRESH_TOKEN_ABSOLUTE_TTL_DAYS',
 ] as const;
 
 export function testEnv(overrides: TestAppOptions['env'] = {}): Record<string, string | undefined> {
@@ -37,6 +62,13 @@ export function testEnv(overrides: TestAppOptions['env'] = {}): Record<string, s
     MONGODB_DB_NAME: `t_${randomUUID().replaceAll('-', '').slice(0, 20)}`,
     THROTTLE_TTL_SECONDS: '60',
     THROTTLE_LIMIT: '1000',
+    JWT_ACCESS_SECRET: TEST_JWT_SECRET,
+    JWT_ACCESS_TTL: '15m',
+    JWT_ISSUER: TEST_JWT_ISSUER,
+    JWT_AUDIENCE: TEST_JWT_AUDIENCE,
+    REFRESH_TOKEN_PEPPER: TEST_REFRESH_PEPPER,
+    REFRESH_TOKEN_TTL_DAYS: '30',
+    REFRESH_TOKEN_ABSOLUTE_TTL_DAYS: '180',
     ...overrides,
   };
 }
@@ -73,13 +105,18 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestE
   if (options.logs) {
     builder.overrideProvider(LOG_DESTINATION).useValue(options.logs.stream);
   }
+  if (options.throttling === false) {
+    builder.overrideProvider(getStorageToken()).useValue(unlimitedStorage);
+  }
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({
     bufferLogs: true,
     bodyParser: false,
   });
   configureApp(app);
-  await app.init();
+  // Listen on an ephemeral port so supertest reuses it instead of binding per request
+  // (which leaks listeners under parallel requests).
+  await app.listen(0, '127.0.0.1');
   return app;
 }
 

@@ -8,6 +8,9 @@ import { AppConfigService } from './config/app-config.service.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { LoggingModule } from './logging/logging.module.js';
+import { AuthModule } from './modules/auth/auth.module.js';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
+import { UsersModule } from './modules/users/users.module.js';
 
 @Module({
   imports: [
@@ -23,9 +26,13 @@ import { LoggingModule } from './logging/logging.module.js';
       }),
     }),
     HealthModule,
+    UsersModule,
+    AuthModule,
   ],
   providers: [
+    // Order matters: throttle first, so unauthenticated floods are rate limited too.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],
 })

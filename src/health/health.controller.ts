@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 import { AppException } from '../common/errors/app.exception.js';
 import { ErrorCode } from '../common/errors/error-codes.js';
 import { ApiErrorResponses } from '../common/swagger/api-error-responses.decorator.js';
+import { Public } from '../modules/auth/decorators/public.decorator.js';
 
 import type { Connection } from 'mongoose';
 
@@ -27,6 +28,7 @@ export class HealthResponseDto {
 
 /** Liveness + database reachability for the hosting platform. Not used by the app. */
 @ApiTags('health')
+@Public()
 @SkipThrottle()
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {

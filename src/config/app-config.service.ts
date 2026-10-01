@@ -32,6 +32,18 @@ export class AppConfigService {
     return { uri: this.get('MONGODB_URI'), dbName: this.get('MONGODB_DB_NAME') };
   }
 
+  get auth() {
+    return {
+      accessTokenSecret: this.get('JWT_ACCESS_SECRET'),
+      accessTokenTtlSeconds: this.get('JWT_ACCESS_TTL'),
+      issuer: this.get('JWT_ISSUER'),
+      audience: this.get('JWT_AUDIENCE'),
+      refreshTokenPepper: this.get('REFRESH_TOKEN_PEPPER'),
+      refreshTokenTtlDays: this.get('REFRESH_TOKEN_TTL_DAYS'),
+      refreshTokenAbsoluteTtlDays: this.get('REFRESH_TOKEN_ABSOLUTE_TTL_DAYS'),
+    };
+  }
+
   get throttle() {
     return { ttlMs: this.get('THROTTLE_TTL_SECONDS') * 1000, limit: this.get('THROTTLE_LIMIT') };
   }

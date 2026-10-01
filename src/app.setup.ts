@@ -38,6 +38,7 @@ export function configureApp(app: NestExpressApplication): void {
         .setTitle('DuoDays API')
         .setDescription('Backend for the DuoDays couples app.')
         .setVersion(`v${API_VERSION}`)
+        .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
         .build(),
     );
     SwaggerModule.setup(SWAGGER_PATH, app, document);

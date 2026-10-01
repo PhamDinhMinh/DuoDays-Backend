@@ -74,13 +74,18 @@ describe('structured logging', () => {
       context: 'Probe',
       req: { id: 'log-test-req-0003' },
       body: {
-        email: 'minh@example.com',
+        email: '[REDACTED]',
         password: '[REDACTED]',
         refreshToken: '[REDACTED]',
         social: { identityToken: '[REDACTED]' },
       },
     });
-    for (const secret of ['hunter2-password', 'rt_secret_refresh', 'apple-identity-secret']) {
+    for (const secret of [
+      'minh@example.com',
+      'hunter2-password',
+      'rt_secret_refresh',
+      'apple-identity-secret',
+    ]) {
       expect(logs.raw()).not.toContain(secret);
     }
   });

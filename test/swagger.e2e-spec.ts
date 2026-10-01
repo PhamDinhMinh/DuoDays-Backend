@@ -22,6 +22,11 @@ describe('Swagger / OpenAPI', () => {
     expect(doc.body.info).toMatchObject({ title: 'DuoDays API', version: 'v1' });
     expect(doc.body.paths['/health']).toBeDefined();
     expect(doc.body.components.schemas.ErrorResponseDto).toBeDefined();
+    for (const path of ['register', 'login', 'refresh', 'logout', 'me']) {
+      expect(doc.body.paths[`/v1/auth/${path}`]).toBeDefined();
+    }
+    expect(doc.body.components.securitySchemes.bearer).toMatchObject({ scheme: 'bearer' });
+    expect(doc.body.paths['/v1/auth/me'].get.security).toEqual([{ bearer: [] }]);
 
     const ui = await http.get('/docs').expect(200);
     expect(ui.text).toContain('swagger');
