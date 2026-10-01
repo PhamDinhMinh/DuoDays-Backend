@@ -121,8 +121,11 @@ sessionId: 'ses_…' }`) and resolve the user via `UsersService.findByPublicId`.
   conditional updates in `AuthSessionsService` – keep rotation a compare-and-swap.
 - Never log emails, passwords, hashes, tokens or the Authorization header – log `usr_`/`ses_`
   ids and outcome codes only.
-- Access tokens are stateless (no DB lookup); revocation takes effect at the next refresh,
-  i.e. within `JWT_ACCESS_TTL`.
+- Access tokens are stateless: `JwtAuthGuard` verifies signature/claims only and never reads
+  the database, so a token for a deleted user or revoked session passes the guard until it
+  expires (≤ `JWT_ACCESS_TTL`). Handlers that need the user must load it via
+  `UsersService.findByPublicId` and throw 401 `UNAUTHENTICATED` if it is gone (as
+  `AuthService.me` does).
 - Per-route limits live in `AUTH_THROTTLE`; e2e tests that create many users pass
   `createTestApp({ throttling: false })`.
 

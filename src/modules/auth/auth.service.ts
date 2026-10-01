@@ -122,6 +122,8 @@ export class AuthService {
   }
 
   async me(auth: AuthContext): Promise<MeResponseDto> {
+    // The guard only proved the token is genuine (no DB lookup). Whether the account still
+    // exists is checked here, by the handler that needs the user.
     const user = await this.users.findByPublicId(auth.userId);
     if (!user) {
       throw unauthenticated();

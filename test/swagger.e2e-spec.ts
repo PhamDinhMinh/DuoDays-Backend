@@ -1,7 +1,12 @@
 import request from 'supertest';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, inject, it } from 'vitest';
 
-import { closeTestApp, createTestApp } from './support/test-app.js';
+import {
+  closeTestApp,
+  createTestApp,
+  TEST_JWT_SECRET,
+  TEST_REFRESH_PEPPER,
+} from './support/test-app.js';
 
 import type { NestExpressApplication } from '@nestjs/platform-express';
 
@@ -27,6 +32,23 @@ describe('Swagger / OpenAPI', () => {
     }
     expect(doc.body.components.securitySchemes.bearer).toMatchObject({ scheme: 'bearer' });
     expect(doc.body.paths['/v1/auth/me'].get.security).toEqual([{ bearer: [] }]);
+
+    // No secrets, persistence-only fields or Mongoose schema classes in the public contract.
+    const json = JSON.stringify(doc.body);
+    for (const leaked of [
+      TEST_JWT_SECRET,
+      TEST_REFRESH_PEPPER,
+      inject('mongoUri'),
+      'passwordHash',
+      'tokenHash',
+      'previousTokenHash',
+      '"_id"',
+    ]) {
+      expect(json).not.toContain(leaked);
+    }
+    for (const schema of ['User', 'AuthSession']) {
+      expect(Object.keys(doc.body.components.schemas)).not.toContain(schema);
+    }
 
     const ui = await http.get('/docs').expect(200);
     expect(ui.text).toContain('swagger');
