@@ -7,7 +7,7 @@ import { createPublicId } from '../../common/ids/public-id.js';
 import { TransactionService } from '../../database/transaction.service.js';
 import { UsersService } from '../users/users.service.js';
 import { CoupleAccessService } from './couple-access.service.js';
-import { Couple } from './couple.schema.js';
+import { Couple, isPublicCoupleStatus } from './couple.schema.js';
 import {
   CoupleMembershipsService,
   isUserAlreadyInCoupleError,
@@ -27,7 +27,10 @@ const alreadyInCouple = () =>
     'You are already part of a couple.',
   );
 
-const coupleNotPending = () =>
+const coupleNotFound = () =>
+  new AppException(ErrorCode.COUPLE_NOT_FOUND, HttpStatus.NOT_FOUND, 'Couple not found.');
+
+export const coupleNotPending = () =>
   new AppException(
     ErrorCode.COUPLE_NOT_PENDING,
     HttpStatus.CONFLICT,
@@ -35,8 +38,9 @@ const coupleNotPending = () =>
   );
 
 /**
- * The couple domain. Phase 2 only ever creates `pending` couples; activation belongs to the
- * Phase 3 join transaction. Logs carry public ids and field names only – never names or
+ * The couple domain. Couples are created `pending`; activation belongs to the join
+ * transaction and cancellation to CoupleSetupService, both through the session-aware
+ * conditional writes below. Logs carry public ids and field names only – never names or
  * dates.
  */
 @Injectable()
@@ -154,11 +158,7 @@ export class CouplesService {
       },
       'couple.updated',
     );
-    const updated = await this.couples.findById(access.couple._id).lean<CoupleRecord>().exec();
-    if (!updated) {
-      throw new AppException(ErrorCode.COUPLE_NOT_FOUND, HttpStatus.NOT_FOUND, 'Couple not found.');
-    }
-    return this.toDetail(updated);
+    return this.getDetailById(access.couple._id);
   }
 
   /** For GET /v1/auth/me: the user's pending/active couple, or null. */
@@ -172,12 +172,84 @@ export class CouplesService {
       .select({ publicId: 1, status: 1 })
       .lean<Pick<CoupleRecord, 'publicId' | 'status'>>()
       .exec();
-    return couple ? toCoupleSummaryDto(couple) : null;
+    // A cancelled couple never has an active membership (same transaction) – defensive only.
+    return couple && isPublicCoupleStatus(couple.status)
+      ? toCoupleSummaryDto({ publicId: couple.publicId, status: couple.status })
+      : null;
+  }
+
+  findById(id: Types.ObjectId, session?: ClientSession): Promise<CoupleRecord | null> {
+    return this.couples.findById(id, null, { session }).lean<CoupleRecord>().exec();
+  }
+
+  async getDetailById(id: Types.ObjectId): Promise<CoupleDto> {
+    const couple = await this.findById(id);
+    if (!couple) {
+      throw coupleNotFound();
+    }
+    return this.toDetail(couple);
+  }
+
+  /*
+   * Session-aware conditional writes. Every couple-setup transaction writes the couple
+   * document, so concurrent transactions on one couple conflict and are serialised by
+   * MongoDB; the `status: 'pending'` filter re-checks the state atomically. Issue,
+   * regenerate and cancel write it first; join deliberately redeems the invite first (see
+   * CoupleSetupService.join). Each returns false when the couple is not pending (or, where
+   * a creator is given, not created by them).
+   */
+
+  /**
+   * Claims the pending couple for this transaction without changing its fields. Mongoose
+   * timestamps turn the empty `$set` into `$set.updatedAt`, so this is a real write (see
+   * `update` above) – keep it non-empty if timestamps are ever disabled. `creatorId` is
+   * defence in depth behind requireCreator: a non-creator never matches.
+   */
+  async lockPending(
+    id: Types.ObjectId,
+    creatorId: Types.ObjectId,
+    session: ClientSession,
+  ): Promise<boolean> {
+    const result = await this.couples.updateOne(
+      { _id: id, status: 'pending', createdByUserId: creatorId },
+      { $set: {} },
+      { session },
+    );
+    return result.matchedCount === 1;
+  }
+
+  /** pending → active; the partner placeholder name is dropped (the partner has their own). */
+  async activatePending(id: Types.ObjectId, session: ClientSession): Promise<boolean> {
+    const result = await this.couples.updateOne(
+      { _id: id, status: 'pending' },
+      { $set: { status: 'active' }, $unset: { pendingPartnerName: 1 } },
+      { session },
+    );
+    return result.matchedCount === 1;
+  }
+
+  /** pending → cancelled, by its creator only. The record is kept; nothing is deleted. */
+  async cancelPending(
+    id: Types.ObjectId,
+    creatorId: Types.ObjectId,
+    session: ClientSession,
+  ): Promise<boolean> {
+    const result = await this.couples.updateOne(
+      { _id: id, status: 'pending', createdByUserId: creatorId },
+      { $set: { status: 'cancelled' } },
+      { session },
+    );
+    return result.matchedCount === 1;
   }
 
   private async toDetail(couple: CoupleRecord): Promise<CoupleDto> {
+    const { status } = couple;
+    if (!isPublicCoupleStatus(status)) {
+      // Unreachable through requireMember (a cancelled couple has no active member).
+      throw coupleNotFound();
+    }
     const memberships = await this.memberships.findActiveByCouple(couple._id);
     const users = await this.users.findByIds(memberships.map(membership => membership.userId));
-    return toCoupleDto(couple, memberships, users);
+    return toCoupleDto({ ...couple, status }, memberships, users);
   }
 }

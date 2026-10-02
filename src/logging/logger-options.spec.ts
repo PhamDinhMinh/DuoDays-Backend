@@ -64,6 +64,31 @@ describe('logger redaction', () => {
     });
   });
 
+  it('redacts the duplicated value of a Mongo duplicate-key error', () => {
+    const { stream, lines, raw } = capture();
+    const errmsg = 'E11000 duplicate key error index: code_1 dup key: { code: "482913" }';
+    pino({ redact }, stream).warn(
+      {
+        err: {
+          code: 11000,
+          keyPattern: { code: 1 },
+          keyValue: { code: '482913' },
+          errorResponse: { errmsg, keyValue: { code: '482913' } },
+        },
+      },
+      'dup',
+    );
+    expect(raw.join('')).not.toContain('482913');
+    expect(lines[0]).toMatchObject({
+      err: {
+        code: 11000,
+        keyPattern: { code: 1 },
+        keyValue: REDACTED,
+        errorResponse: { errmsg: REDACTED, keyValue: REDACTED },
+      },
+    });
+  });
+
   it('keeps ordinary fields', () => {
     const { stream, lines } = capture();
     pino({ redact }, stream).info({ code: 'INVITE_EXPIRED', userId: 'usr_x' }, 'kept');

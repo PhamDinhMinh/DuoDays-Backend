@@ -32,6 +32,30 @@ describe('Swagger / OpenAPI', () => {
     }
     expect(Object.keys(doc.body.paths['/v1/couples'])).toEqual(['post']);
     expect(Object.keys(doc.body.paths['/v1/couples/{coupleId}']).sort()).toEqual(['get', 'patch']);
+    for (const path of [
+      '/v1/couples/{coupleId}/invite',
+      '/v1/couples/{coupleId}/invite/regenerate',
+      '/v1/couples/{coupleId}/cancel',
+      '/v1/invites/lookup',
+      '/v1/invites/join',
+    ]) {
+      expect(Object.keys(doc.body.paths[path])).toEqual(['post']);
+      expect(doc.body.paths[path].post.security).toEqual([{ bearer: [] }]);
+    }
+    // No GET with a code in the path – codes travel in request bodies only.
+    expect(Object.keys(doc.body.paths).filter(path => path.includes('{code}'))).toEqual([]);
+    expect(doc.body.components.schemas.InvitePreviewDto.properties).toHaveProperty('ownerName');
+    expect(Object.keys(doc.body.components.schemas.InvitePreviewDto.properties)).toEqual([
+      'ownerName',
+    ]);
+    // The internal `cancelled` status is never part of the public contract.
+    for (const schema of ['CoupleDto', 'CoupleSummaryDto']) {
+      expect(doc.body.components.schemas[schema].properties.status.enum).toEqual([
+        'pending',
+        'active',
+      ]);
+    }
+    expect(doc.body.paths['/v1/invites/join'].post.description).toContain('INVITE_EXPIRED');
     expect(doc.body.components.securitySchemes.bearer).toMatchObject({ scheme: 'bearer' });
     expect(doc.body.paths['/v1/auth/me'].get.security).toEqual([{ bearer: [] }]);
 
@@ -45,11 +69,13 @@ describe('Swagger / OpenAPI', () => {
       'tokenHash',
       'previousTokenHash',
       'createdByUserId',
+      'redeemedByUserId',
+      'purgeAt',
       '"_id"',
     ]) {
       expect(json).not.toContain(leaked);
     }
-    for (const schema of ['User', 'AuthSession', 'Couple', 'CoupleMembership']) {
+    for (const schema of ['User', 'AuthSession', 'Couple', 'CoupleMembership', 'CoupleInvite']) {
       expect(Object.keys(doc.body.components.schemas)).not.toContain(schema);
     }
 

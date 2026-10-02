@@ -44,6 +44,7 @@ src/
     dates/           calendar-date.ts – the ONLY place calendar-date rules live
     ids/             createPublicId / isPublicId
     swagger/         @ApiErrorResponses()
+    throttling/      @UserRateLimit() – per-user + per-IP shared buckets (route guard)
   database/          DatabaseModule (Mongoose), TransactionService
   logging/           nestjs-pino: request ids, redaction, LOG_DESTINATION
   health/            GET /health (version-neutral, unthrottled, @Public)
@@ -52,9 +53,12 @@ src/
     auth/            register/login/refresh/logout/me; PasswordHasher (Argon2id),
                      AccessTokenService (JWT), AuthSessionsService (refresh sessions),
                      JwtAuthGuard (global), @Public(), @CurrentUser()
-    couples/         Couple + CoupleMembership schemas, CouplesService (create/read/update,
-                     /auth/me summary), CoupleMembershipsService (session-aware),
-                     CoupleAccessService (requireCaller/requireMember/requireCreator)
+    couples/         Couple + CoupleMembership + CoupleInvite schemas, CouplesService
+                     (create/read/update, /auth/me summary, session-aware conditional
+                     status writes), CoupleMembershipsService, CoupleInvitesService
+                     (session-aware), CoupleAccessService (requireCaller/requireMember/
+                     requireCreator), CoupleSetupService (invite issue/regenerate, cancel,
+                     lookup, join), InviteCodeGenerator, InvitesController (/invites/*)
 test/
   support/           global-setup (in-memory replica set), test-app factory, ProbeModule
   *.e2e-spec.ts
@@ -104,9 +108,14 @@ test/
 - `autoIndex` is off in production. **Deployment prerequisite (not built yet):** before the
   first production deployment there must be an explicit index deployment/verification step
   for every invariant-critical index – users `emailNormalized_1`, couple_memberships
-  `userId_1` and `coupleId_1_role_1`, and any future invariant-critical invite indexes.
-  Without it those invariants are not enforced in production. Do not "fix" this by enabling
+  `userId_1` and `coupleId_1_role_1`, couple_invites `code_1` and `coupleId_1`. (The
+  couple_invites `purgeAt_1` TTL index is cleanup only, not correctness-critical.) Without
+  it those invariants are not enforced in production. Do not "fix" this by enabling
   autoIndex in production. See README → Deployment prerequisites.
+- Duplicate-key errors are classified by `keyPattern` (`isDuplicateKeyOn`): the driver
+  exposes no structured index name (its `index` field is the batch position; the name is
+  only in `errmsg`). Never parse `errmsg`. The exception filter logs only the class, code
+  and key pattern of a duplicate-key error – its message/`keyValue` contain the value.
 - Multi-document writes go through `TransactionService.run(session => …)`. Pass `session` to
   every operation; the callback may be retried, so no side effects outside MongoDB inside it.
 - Expose `publicId` (`usr_…`, `cpl_…`), never `_id`. Map documents to DTOs; never return
@@ -148,12 +157,45 @@ sessionId: 'ses_…' }`) and resolve the user via `UsersService.findByPublicId`.
 - Couple-scoped endpoints start with `CoupleAccessService.requireMember(auth, coupleId)`.
   Non-members, unknown and malformed ids all get the same 404 `COUPLE_NOT_FOUND` – never
   reveal that a couple exists. Status rules (pending/active) go into the write's filter.
-- Only the Phase 3 join transaction may set `status: 'active'`. Membership/couple service
-  methods take an optional `ClientSession` so they compose into that transaction.
+- Couple status: `pending | active | cancelled`. Only the join transaction sets `active`; only
+  cancel sets `cancelled` (and ends the creator membership as `left` in the same
+  transaction). `cancelled` is internal – the public DTO enum is `PUBLIC_COUPLE_STATUSES`.
+- Every couple-setup transaction writes the couple document with a `status: 'pending'`
+  filter, so concurrent operations on one couple conflict and MongoDB serialises them (the
+  later writer gets a write conflict; its transaction is retried against the committed
+  state). Issue/regenerate (`lockPending`) and cancel (`cancelPending`) write the couple
+  **first**; new setup transactions must do the same. Both filters also carry
+  `createdByUserId` (defence in depth behind `requireCreator`).
+- **Join is the intentional exception**: its first gate is the invite redemption
+  compare-and-swap, the couple write (`activatePending`) comes second. That way a join
+  that loses to a concurrent join/regenerate/cancel fails on the invite and gets the
+  precise invite error (`INVITE_ALREADY_REDEEMED` / `INVITE_EXPIRED`). It stays safe
+  because every competing transaction writes the same invite and/or couple document. Do
+  not "fix" the order. Races are covered with write-boundary barriers in
+  `test/couples-setup-races.e2e-spec.ts` (`test/support/barrier.ts`).
+- Cancel is not idempotent (current semantics, documented in Swagger): a sequential retry
+  after a completed cancel is 404 `COUPLE_NOT_FOUND` (no longer a member); a concurrent
+  losing cancel that passed the pre-check is 409 `COUPLE_NOT_PENDING`.
 - `startDate` (and every future calendar date) is a `YYYY-MM-DD` **string** end-to-end:
   DTO → MongoDB → response. Never construct a `Date` from it, never store it as a BSON
   Date. Validation/bounds come only from `common/dates/calendar-date.ts`.
 - Never log names, placeholder names or dates – public ids and field names only.
+- Invites (`couple_invites`): stored states `active | redeemed | revoked`; expiry is derived
+  (`usable ⇔ active && now < expiresAt`) – never stored, never left to the TTL index
+  (`purgeAt` is cleanup only). `code` is unique across all invites until purged;
+  `coupleId` is unique among active ones. Join redeems with a compare-and-swap on
+  `{status:'active', expiresAt > now}` and sets `redeemedAt` in the same transaction.
+- Join replay (same partner, same code → 200 same couple) works only while the redeemed
+  invite is retained (`INVITE_RETENTION_MS`, ~24 h after redemption). After the purge the
+  partner gets `ALREADY_IN_COUPLE`. A purged code may eventually be issued again (accepted).
+- `INVITE_EXPIRED` means "no longer usable": expired **or** revoked. Do not narrow it.
+- Invite codes are secrets: only in request/response bodies, never in a URL, a log call or
+  an error message. A code duplicate-key error must never escape (it contains the code).
+- Code-guessing routes use `@UserRateLimit` with a shared bucket (`INVITE_RATE_LIMITS`).
+  The guard runs before the ValidationPipe, so malformed bodies spend the budget too.
+  Per-IP buckets rely on `req.ip`: behind a proxy, `trust proxy` must be set to the exact
+  hop count (never `true`) – a deployment prerequisite, see README. The per-IP limits must
+  be reviewed for carrier-NAT/shared-IP mobile users before production traffic.
 - `npm run test:tz` re-runs date + couple tests under Asia/Ho_Chi_Minh and
   America/New_York; keep new date logic covered there.
 

@@ -50,6 +50,7 @@ const ENV_KEYS = [
   'REFRESH_TOKEN_PEPPER',
   'REFRESH_TOKEN_TTL_DAYS',
   'REFRESH_TOKEN_ABSOLUTE_TTL_DAYS',
+  'INVITE_TTL_HOURS',
 ] as const;
 
 export function testEnv(overrides: TestAppOptions['env'] = {}): Record<string, string | undefined> {
@@ -69,6 +70,7 @@ export function testEnv(overrides: TestAppOptions['env'] = {}): Record<string, s
     REFRESH_TOKEN_PEPPER: TEST_REFRESH_PEPPER,
     REFRESH_TOKEN_TTL_DAYS: '30',
     REFRESH_TOKEN_ABSOLUTE_TTL_DAYS: '180',
+    INVITE_TTL_HOURS: '24',
     ...overrides,
   };
 }

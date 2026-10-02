@@ -57,7 +57,7 @@ export async function userWithCouple(app: NestExpressApplication, body = VALID_C
 
 export function raw(
   app: NestExpressApplication,
-  name: 'users' | 'couples' | 'couple_memberships',
+  name: 'users' | 'couples' | 'couple_memberships' | 'couple_invites',
 ): Collection<RawDoc> {
   return app.get<Connection>(getConnectionToken()).collection(name);
 }
@@ -76,7 +76,7 @@ export async function internalIds(
 }
 
 /**
- * Test-only shortcut standing in for Phase 3: puts `partnerPublicId` into the couple as an
+ * Test-only shortcut (bypasses the join flow): puts `partnerPublicId` into the couple as an
  * active partner membership, directly in the database.
  */
 export async function insertPartnerMembership(

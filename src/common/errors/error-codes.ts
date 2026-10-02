@@ -29,6 +29,18 @@ export const ErrorCode = {
   ALREADY_IN_COUPLE: 'ALREADY_IN_COUPLE',
   COUPLE_NOT_FOUND: 'COUPLE_NOT_FOUND',
   COUPLE_NOT_PENDING: 'COUPLE_NOT_PENDING',
+
+  // Couple invites
+  /** No invite has this code (never issued, or already purged). */
+  INVITE_NOT_FOUND: 'INVITE_NOT_FOUND',
+  /**
+   * The invite is no longer usable: EITHER its expiry passed (`now >= expiresAt`) OR it was
+   * revoked (replaced by a newer code, or its couple was cancelled). Both mean "ask your
+   * partner for a new code" – do not read this as "expiry time passed" only.
+   */
+  INVITE_EXPIRED: 'INVITE_EXPIRED',
+  /** Someone else already joined with this invite. */
+  INVITE_ALREADY_REDEEMED: 'INVITE_ALREADY_REDEEMED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

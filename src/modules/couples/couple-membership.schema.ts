@@ -8,11 +8,11 @@ export const MEMBERSHIP_ROLES = ['creator', 'partner'] as const;
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
 
 /**
- * Only `active` exists today. The field is there so both unique indexes below can be
- * partial: a future leave/cancel flow adds another status (e.g. `left`) without touching
- * the indexes, and ended memberships stop counting automatically.
+ * `active`: the user is in this (pending or connected) couple.
+ * `left`: the membership ended (today only by cancelling a pending couple). Both unique
+ * indexes below are partial on `active`, so ended memberships stop counting automatically.
  */
-export const MEMBERSHIP_STATUSES = ['active'] as const;
+export const MEMBERSHIP_STATUSES = ['active', 'left'] as const;
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
 
 /** A user's place in a couple. `createdAt` is when they joined. */

@@ -5,12 +5,22 @@ import { User } from '../users/user.schema.js';
 
 import type { CalendarDate } from '../../common/dates/calendar-date.js';
 
-export const COUPLE_STATUSES = ['pending', 'active'] as const;
+export const COUPLE_STATUSES = ['pending', 'active', 'cancelled'] as const;
 /**
- * `pending`: created, partner not joined yet – the only status Phase 2 ever writes.
- * `active`: both partners connected – set exclusively by the Phase 3 join transaction.
+ * `pending`: created, partner not joined yet.
+ * `active`: both partners connected – set exclusively by the join transaction.
+ * `cancelled`: the creator gave up a pending couple (internal only: its membership ended
+ * in the same transaction, so no API response ever shows this status).
  */
 export type CoupleStatus = (typeof COUPLE_STATUSES)[number];
+
+/** Statuses the API can return – a cancelled couple is never visible to anyone. */
+export const PUBLIC_COUPLE_STATUSES = ['pending', 'active'] as const;
+export type PublicCoupleStatus = (typeof PUBLIC_COUPLE_STATUSES)[number];
+
+export function isPublicCoupleStatus(status: CoupleStatus): status is PublicCoupleStatus {
+  return status !== 'cancelled';
+}
 
 @Schema({ collection: 'couples', timestamps: true })
 export class Couple {
@@ -31,7 +41,7 @@ export class Couple {
   @Prop({ type: String, required: true })
   startDate: CalendarDate;
 
-  /** The creator's name for their partner; only while pending (Phase 3 clears it on join). */
+  /** The creator's name for their partner; only while pending (cleared on join). */
   @Prop({ type: String })
   pendingPartnerName?: string;
 

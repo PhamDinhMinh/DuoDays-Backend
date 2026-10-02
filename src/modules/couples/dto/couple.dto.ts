@@ -1,10 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-import { COUPLE_STATUSES } from '../couple.schema.js';
+import { PUBLIC_COUPLE_STATUSES } from '../couple.schema.js';
 import { MEMBERSHIP_ROLES } from '../couple-membership.schema.js';
 
 import type { UserRecord } from '../../users/user.schema.js';
-import type { CoupleRecord, CoupleStatus } from '../couple.schema.js';
+import type { CoupleRecord, PublicCoupleStatus } from '../couple.schema.js';
 import type { CoupleMembershipRecord, MembershipRole } from '../couple-membership.schema.js';
 
 /** What one partner may see about the other – no email, no account fields. */
@@ -23,8 +23,8 @@ export class CoupleDto {
   @ApiProperty({ example: 'cpl_8Qw2LmN4pZx7Ka1B' })
   id: string;
 
-  @ApiProperty({ enum: COUPLE_STATUSES })
-  status: CoupleStatus;
+  @ApiProperty({ enum: PUBLIC_COUPLE_STATUSES })
+  status: PublicCoupleStatus;
 
   @ApiProperty({ example: '2025-08-28', format: 'date' })
   startDate: string;
@@ -44,13 +44,16 @@ export class CoupleSummaryDto {
   @ApiProperty({ example: 'cpl_8Qw2LmN4pZx7Ka1B' })
   id: string;
 
-  @ApiProperty({ enum: COUPLE_STATUSES })
-  status: CoupleStatus;
+  @ApiProperty({ enum: PUBLIC_COUPLE_STATUSES })
+  status: PublicCoupleStatus;
 }
+
+/** A couple that may be shown: never `cancelled` (see isPublicCoupleStatus). */
+export type VisibleCoupleRecord = CoupleRecord & { status: PublicCoupleStatus };
 
 /** The only way a couple leaves the API – never `_id` or internal references. */
 export function toCoupleDto(
-  couple: CoupleRecord,
+  couple: VisibleCoupleRecord,
   memberships: CoupleMembershipRecord[],
   users: UserRecord[],
 ): CoupleDto {
@@ -74,7 +77,7 @@ export function toCoupleDto(
 }
 
 export function toCoupleSummaryDto(
-  couple: Pick<CoupleRecord, 'publicId' | 'status'>,
+  couple: Pick<VisibleCoupleRecord, 'publicId' | 'status'>,
 ): CoupleSummaryDto {
   return { id: couple.publicId, status: couple.status };
 }

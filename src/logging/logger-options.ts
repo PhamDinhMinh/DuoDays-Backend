@@ -32,6 +32,9 @@ const SENSITIVE_KEYS = [
   'identityToken',
   'authorizationCode',
   'inviteCode',
+  // Mongo duplicate-key errors: the offending values (an invite code, an email) live here.
+  'keyValue',
+  'errmsg',
   'secret',
   'apiKey',
   'pepper',

@@ -44,6 +44,10 @@ export class AppConfigService {
     };
   }
 
+  get couples() {
+    return { inviteTtlMs: this.get('INVITE_TTL_HOURS') * 60 * 60 * 1000 };
+  }
+
   get throttle() {
     return { ttlMs: this.get('THROTTLE_TTL_SECONDS') * 1000, limit: this.get('THROTTLE_LIMIT') };
   }

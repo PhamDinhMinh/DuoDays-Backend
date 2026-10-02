@@ -2,8 +2,7 @@ import { z } from 'zod';
 
 /*
  * The process environment, validated once at startup. A missing or malformed value stops
- * the app before it listens. Only variables a shipped phase actually reads belong here –
- * invite settings are added with their phase.
+ * the app before it listens. Only variables a shipped phase actually reads belong here.
  */
 
 const booleanString = z
@@ -79,6 +78,14 @@ export const envSchema = z
     REFRESH_TOKEN_PEPPER: secret,
     REFRESH_TOKEN_TTL_DAYS: days(365).default(30),
     REFRESH_TOKEN_ABSOLUTE_TTL_DAYS: days(730).default(180),
+
+    /** How long a couple invite code stays usable after it is issued. */
+    INVITE_TTL_HOURS: z.coerce
+      .number({ error: 'must be a number' })
+      .int({ error: 'must be a whole number' })
+      .min(1, { error: 'must be between 1 and 168' })
+      .max(168, { error: 'must be between 1 and 168' })
+      .default(24),
   })
   .superRefine((env, ctx) => {
     if (env.REFRESH_TOKEN_PEPPER === env.JWT_ACCESS_SECRET) {

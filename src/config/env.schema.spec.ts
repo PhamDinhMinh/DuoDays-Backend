@@ -40,6 +40,7 @@ describe('validateEnv', () => {
       REFRESH_TOKEN_PEPPER: valid.REFRESH_TOKEN_PEPPER,
       REFRESH_TOKEN_TTL_DAYS: 30,
       REFRESH_TOKEN_ABSOLUTE_TTL_DAYS: 180,
+      INVITE_TTL_HOURS: 24,
     });
   });
 
@@ -50,8 +51,10 @@ describe('validateEnv', () => {
       SWAGGER_ENABLED: 'true',
       THROTTLE_LIMIT: '5',
       LOG_LEVEL: 'debug',
+      INVITE_TTL_HOURS: '48',
     });
     expect(env).toMatchObject({
+      INVITE_TTL_HOURS: 48,
       PORT: 8080,
       SWAGGER_ENABLED: true,
       THROTTLE_LIMIT: 5,
@@ -73,6 +76,9 @@ describe('validateEnv', () => {
     ['SWAGGER_ENABLED', 'yes'],
     ['THROTTLE_LIMIT', '0'],
     ['MONGODB_DB_NAME', 'bad name!'],
+    ['INVITE_TTL_HOURS', '0'],
+    ['INVITE_TTL_HOURS', '169'],
+    ['INVITE_TTL_HOURS', '1.5'],
   ])('rejects %s=%s', (key, value) => {
     expect(issuesOf({ ...valid, [key]: value }).some(issue => issue.startsWith(`${key} `))).toBe(
       true,

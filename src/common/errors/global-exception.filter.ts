@@ -48,7 +48,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const resolved = this.resolve(exception);
 
     if (resolved.status >= 500) {
-      this.logger.error({ err: exception }, 'Unhandled error');
+      this.logger.error({ err: loggableError(exception) }, 'Unhandled error');
     }
 
     const body: ErrorResponse = {
@@ -76,7 +76,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
     if (isDuplicateKeyError(exception)) {
       // Backstop only: services should pre-check and throw a domain-specific code.
-      this.logger.warn({ err: exception }, 'Duplicate key reached the exception filter');
+      this.logger.warn(
+        { err: loggableError(exception) },
+        'Duplicate key reached the exception filter',
+      );
       return this.fromStatus(HttpStatus.CONFLICT);
     }
     const httpError = asExposedHttpError(exception);
@@ -100,6 +103,20 @@ function isDuplicateKeyError(value: unknown): boolean {
     (value as { name?: unknown }).name === 'MongoServerError' &&
     (value as { code?: unknown }).code === 11000
   );
+}
+
+/**
+ * What the filter logs for an error. A Mongo duplicate-key error (code 11000, whatever its
+ * class) repeats the duplicated value – an invite code, an email – in its message, stack,
+ * `errmsg` and `keyValue`, so only its class, code and key pattern (field names) are
+ * logged. Everything else is logged as is.
+ */
+function loggableError(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) {
+    return value;
+  }
+  const { name, code, keyPattern } = value as Record<string, unknown>;
+  return code === 11000 ? { type: name, code, keyPattern } : value;
 }
 
 /** `http-errors`-style errors that are safe to surface with their (4xx) status. */
