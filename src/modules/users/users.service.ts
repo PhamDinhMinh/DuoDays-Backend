@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import mongoose from 'mongoose';
 
 import { createPublicId } from '../../common/ids/public-id.js';
 import { normalizeEmail } from './email.js';
@@ -53,8 +54,24 @@ export class UsersService {
     return this.users.findById(id).lean<UserRecord>().exec();
   }
 
+  findByIds(ids: Types.ObjectId[]): Promise<UserRecord[]> {
+    return this.users
+      .find({ _id: mongoose.trusted({ $in: ids }) })
+      .lean<UserRecord[]>()
+      .exec();
+  }
+
   findByPublicId(publicId: string): Promise<UserRecord | null> {
     return this.users.findOne({ publicId }).lean<UserRecord>().exec();
+  }
+
+  /** Renames the user; pass `session` to take part in a transaction. */
+  async updateDisplayName(
+    id: Types.ObjectId,
+    displayName: string,
+    session?: ClientSession,
+  ): Promise<void> {
+    await this.users.updateOne({ _id: id }, { $set: { displayName } }, { session }).exec();
   }
 
   async updatePasswordHash(id: Types.ObjectId, passwordHash: string): Promise<void> {

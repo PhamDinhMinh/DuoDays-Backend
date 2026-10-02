@@ -26,7 +26,9 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:e2e && npm run verify:dist"
+    "test:tz": "TZ=Asia/Ho_Chi_Minh npm run -s test:tz:one && TZ=America/New_York npm run -s test:tz:one",
+    "test:tz:one": "vitest run src/common/dates && vitest run --config ./vitest.config.e2e.ts test/couples",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:e2e && npm run test:tz && npm run verify:dist"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.2",

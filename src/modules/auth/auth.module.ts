@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AppConfigService } from '../../config/app-config.service.js';
+import { CouplesModule } from '../couples/couples.module.js';
 import { UsersModule } from '../users/users.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
@@ -14,6 +15,7 @@ import { ACCESS_TOKEN_ALGORITHM, AccessTokenService } from './tokens/access-toke
 @Module({
   imports: [
     UsersModule,
+    CouplesModule,
     MongooseModule.forFeature([{ name: AuthSession.name, schema: AuthSessionSchema }]),
     JwtModule.registerAsync({
       inject: [AppConfigService],

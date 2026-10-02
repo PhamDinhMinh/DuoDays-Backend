@@ -51,14 +51,17 @@ outstanding access tokens (clients refresh).
 
 ## API (so far)
 
-| Method | Path                | Auth   | Notes                                            |
-| ------ | ------------------- | ------ | ------------------------------------------------ |
-| GET    | `/health`           | public | Version-neutral; database ping                   |
-| POST   | `/v1/auth/register` | public | `{ displayName, email, password }` → 201 session |
-| POST   | `/v1/auth/login`    | public | `{ email, password }` → 200 session              |
-| POST   | `/v1/auth/refresh`  | public | `{ refreshToken }` → 200 `{ tokens }` (rotates)  |
-| POST   | `/v1/auth/logout`   | public | `{ refreshToken }` → 204 (idempotent)            |
-| GET    | `/v1/auth/me`       | Bearer | → 200 `{ user }`                                 |
+| Method | Path                | Auth   | Notes                                                |
+| ------ | ------------------- | ------ | ---------------------------------------------------- |
+| GET    | `/health`           | public | Version-neutral; database ping                       |
+| POST   | `/v1/auth/register` | public | `{ displayName, email, password }` → 201 session     |
+| POST   | `/v1/auth/login`    | public | `{ email, password }` → 200 session                  |
+| POST   | `/v1/auth/refresh`  | public | `{ refreshToken }` → 200 `{ tokens }` (rotates)      |
+| POST   | `/v1/auth/logout`   | public | `{ refreshToken }` → 204 (idempotent)                |
+| GET    | `/v1/auth/me`       | Bearer | → 200 `{ user, activeCouple: {id,status} \| null }`  |
+| POST   | `/v1/couples`       | Bearer | `{ ownerName, partnerName, startDate }` → 201 couple |
+| GET    | `/v1/couples/{id}`  | Bearer | Members only (others: 404) → 200 couple              |
+| PATCH  | `/v1/couples/{id}`  | Bearer | Creator only, pending only; any of the 3 fields      |
 
 ## Scripts
 
@@ -74,3 +77,22 @@ outstanding access tokens (clients refresh).
 | `npm run test:e2e`     | E2E tests (`test/**/*.e2e-spec.ts`) against an in-memory replica set |
 | `npm run verify:dist`  | Build, then load the compiled module graph under plain Node ESM      |
 | `npm run check`        | All of the above – run before every commit                           |
+
+## Deployment prerequisites
+
+Not implemented yet – required before the **first production deployment**:
+
+- **Invariant-critical MongoDB indexes.** Production runs with Mongoose `autoIndex` disabled,
+  so nothing creates indexes there automatically. An explicit index deployment/verification
+  mechanism must exist and run (and fail the deployment if indexes are missing or differ) for:
+  - `users.emailNormalized_1` – unique (partial) normalized-email uniqueness
+  - `couple_memberships.userId_1` – unique, partial on `status: 'active'` (one active couple
+    per user)
+  - `couple_memberships.coupleId_1_role_1` – unique, partial on `status: 'active'` (one
+    active creator and one active partner per couple)
+  - any future invariant-critical invite indexes (Phase 3)
+
+  Without these, the corresponding guarantees are **not enforced** in production. Do not
+  enable `autoIndex` in production as a substitute.
+
+- **`trust proxy`** must match the hosting proxy so per-IP rate limits see real client IPs.

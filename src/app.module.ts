@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module.js';
 import { LoggingModule } from './logging/logging.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
+import { CouplesModule } from './modules/couples/couples.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
 @Module({
@@ -28,6 +29,7 @@ import { UsersModule } from './modules/users/users.module.js';
     HealthModule,
     UsersModule,
     AuthModule,
+    CouplesModule,
   ],
   providers: [
     // Order matters: throttle first, so unauthenticated floods are rate limited too.

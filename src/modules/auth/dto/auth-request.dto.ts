@@ -1,10 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDefined, IsEmail, IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
+import { IsDefined, IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
-import { MaxUtf16Length, MinUtf16Length, Trim } from '../../../common/validation/decorators.js';
+import {
+  MaxUtf16Length,
+  MinUtf16Length,
+  PERSON_NAME_MAX_LENGTH,
+  PersonName,
+  Trim,
+} from '../../../common/validation/decorators.js';
 import { ValidationKey } from '../../../common/validation/validation-keys.js';
 import {
-  DISPLAY_NAME_MAX_LENGTH,
   EMAIL_MAX_LENGTH,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -18,17 +23,10 @@ import {
 
 const required = { message: ValidationKey.required };
 const invalid = { message: ValidationKey.invalid };
-/** No control characters (newlines, tabs, NUL…) in a display name. */
-const NO_CONTROL_CHARS = /^[^\p{Cc}]*$/u;
 
 export class RegisterDto {
-  @ApiProperty({ example: 'Minh', maxLength: DISPLAY_NAME_MAX_LENGTH })
-  @MaxUtf16Length(DISPLAY_NAME_MAX_LENGTH, { message: ValidationKey.nameTooLong })
-  @Matches(NO_CONTROL_CHARS, invalid)
-  @IsNotEmpty(required)
-  @IsString(invalid)
-  @IsDefined(required)
-  @Trim()
+  @ApiProperty({ example: 'Minh', maxLength: PERSON_NAME_MAX_LENGTH })
+  @PersonName()
   displayName: string;
 
   @ApiProperty({ example: 'minh@example.com', maxLength: EMAIL_MAX_LENGTH })

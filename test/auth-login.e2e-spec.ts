@@ -29,7 +29,7 @@ describe('POST /v1/auth/login', () => {
     expect(body.user).toEqual(user);
     expect(body.tokens.tokenType).toBe('Bearer');
     const res = await me(app, body.tokens.accessToken).expect(200);
-    expect(res.body).toEqual({ user });
+    expect(res.body).toEqual({ user, activeCouple: null });
   });
 
   it('matches the email case- and whitespace-insensitively', async () => {

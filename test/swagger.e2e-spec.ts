@@ -30,6 +30,8 @@ describe('Swagger / OpenAPI', () => {
     for (const path of ['register', 'login', 'refresh', 'logout', 'me']) {
       expect(doc.body.paths[`/v1/auth/${path}`]).toBeDefined();
     }
+    expect(Object.keys(doc.body.paths['/v1/couples'])).toEqual(['post']);
+    expect(Object.keys(doc.body.paths['/v1/couples/{coupleId}']).sort()).toEqual(['get', 'patch']);
     expect(doc.body.components.securitySchemes.bearer).toMatchObject({ scheme: 'bearer' });
     expect(doc.body.paths['/v1/auth/me'].get.security).toEqual([{ bearer: [] }]);
 
@@ -42,11 +44,12 @@ describe('Swagger / OpenAPI', () => {
       'passwordHash',
       'tokenHash',
       'previousTokenHash',
+      'createdByUserId',
       '"_id"',
     ]) {
       expect(json).not.toContain(leaked);
     }
-    for (const schema of ['User', 'AuthSession']) {
+    for (const schema of ['User', 'AuthSession', 'Couple', 'CoupleMembership']) {
       expect(Object.keys(doc.body.components.schemas)).not.toContain(schema);
     }
 

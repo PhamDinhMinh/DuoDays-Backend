@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+import { CoupleSummaryDto } from '../../couples/dto/couple.dto.js';
 import { UserDto } from '../../users/dto/user.dto.js';
 
 export class TokensDto {
@@ -45,4 +46,12 @@ export class RefreshResponseDto {
 export class MeResponseDto {
   @ApiProperty({ type: UserDto })
   user: UserDto;
+
+  @ApiProperty({
+    type: CoupleSummaryDto,
+    nullable: true,
+    description:
+      'The pending/active couple, or null before Couple Setup. Details: GET /v1/couples/{id}.',
+  })
+  activeCouple: CoupleSummaryDto | null;
 }

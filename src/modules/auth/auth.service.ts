@@ -3,6 +3,7 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from '../../common/errors/app.exception.js';
 import { ErrorCode } from '../../common/errors/error-codes.js';
 import { TransactionService } from '../../database/transaction.service.js';
+import { CouplesService } from '../couples/couples.service.js';
 import { toUserDto } from '../users/dto/user.dto.js';
 import { UsersService } from '../users/users.service.js';
 import { PasswordHasher } from './password/password-hasher.js';
@@ -51,6 +52,7 @@ export class AuthService {
     private readonly passwords: PasswordHasher,
     private readonly accessTokens: AccessTokenService,
     private readonly transactions: TransactionService,
+    private readonly couples: CouplesService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthSessionDto> {
@@ -128,7 +130,10 @@ export class AuthService {
     if (!user) {
       throw unauthenticated();
     }
-    return { user: toUserDto(user) };
+    return {
+      user: toUserDto(user),
+      activeCouple: await this.couples.activeCoupleSummary(user._id),
+    };
   }
 
   private async toAuthSession(user: UserRecord, session: IssuedSession): Promise<AuthSessionDto> {

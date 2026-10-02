@@ -39,7 +39,9 @@ src/
   config/            env.schema.ts (zod, the only reader of process.env) + AppConfigService
   common/
     errors/          ErrorCode, AppException, GlobalExceptionFilter, ErrorResponseDto
-    validation/      ValidationKey, createValidationPipe()
+    validation/      ValidationKey, createValidationPipe(), @PersonName(), @Trim(),
+                     @IsRelationshipStartDate(), UTF-16 length validators
+    dates/           calendar-date.ts – the ONLY place calendar-date rules live
     ids/             createPublicId / isPublicId
     swagger/         @ApiErrorResponses()
   database/          DatabaseModule (Mongoose), TransactionService
@@ -50,6 +52,9 @@ src/
     auth/            register/login/refresh/logout/me; PasswordHasher (Argon2id),
                      AccessTokenService (JWT), AuthSessionsService (refresh sessions),
                      JwtAuthGuard (global), @Public(), @CurrentUser()
+    couples/         Couple + CoupleMembership schemas, CouplesService (create/read/update,
+                     /auth/me summary), CoupleMembershipsService (session-aware),
+                     CoupleAccessService (requireCaller/requireMember/requireCreator)
 test/
   support/           global-setup (in-memory replica set), test-app factory, ProbeModule
   *.e2e-spec.ts
@@ -96,7 +101,12 @@ test/
 
 - Global `sanitizeFilter` is on: any `$`-operator inside a query filter is neutralised.
   Operators written by our code must be wrapped: `{ expiresAt: mongoose.trusted({ $gt: now }) }`.
-- `autoIndex` is off in production; indexes are synced explicitly on deploy.
+- `autoIndex` is off in production. **Deployment prerequisite (not built yet):** before the
+  first production deployment there must be an explicit index deployment/verification step
+  for every invariant-critical index – users `emailNormalized_1`, couple_memberships
+  `userId_1` and `coupleId_1_role_1`, and any future invariant-critical invite indexes.
+  Without it those invariants are not enforced in production. Do not "fix" this by enabling
+  autoIndex in production. See README → Deployment prerequisites.
 - Multi-document writes go through `TransactionService.run(session => …)`. Pass `session` to
   every operation; the callback may be retried, so no side effects outside MongoDB inside it.
 - Expose `publicId` (`usr_…`, `cpl_…`), never `_id`. Map documents to DTOs; never return
@@ -128,6 +138,24 @@ sessionId: 'ses_…' }`) and resolve the user via `UsersService.findByPublicId`.
   `AuthService.me` does).
 - Per-route limits live in `AUTH_THROTTLE`; e2e tests that create many users pass
   `createTestApp({ throttling: false })`.
+
+### Couples
+
+- Membership lives in `couple_memberships`, never embedded in `couples`. Two partial unique
+  indexes (only `status: 'active'` rows) are the real guarantees: one active couple per user
+  (`userId_1`) and at most one creator + one partner per couple (`coupleId_1_role_1`).
+  Application pre-checks exist only for clean errors; map the duplicate-key error too.
+- Couple-scoped endpoints start with `CoupleAccessService.requireMember(auth, coupleId)`.
+  Non-members, unknown and malformed ids all get the same 404 `COUPLE_NOT_FOUND` – never
+  reveal that a couple exists. Status rules (pending/active) go into the write's filter.
+- Only the Phase 3 join transaction may set `status: 'active'`. Membership/couple service
+  methods take an optional `ClientSession` so they compose into that transaction.
+- `startDate` (and every future calendar date) is a `YYYY-MM-DD` **string** end-to-end:
+  DTO → MongoDB → response. Never construct a `Date` from it, never store it as a BSON
+  Date. Validation/bounds come only from `common/dates/calendar-date.ts`.
+- Never log names, placeholder names or dates – public ids and field names only.
+- `npm run test:tz` re-runs date + couple tests under Asia/Ho_Chi_Minh and
+  America/New_York; keep new date logic covered there.
 
 ### API
 

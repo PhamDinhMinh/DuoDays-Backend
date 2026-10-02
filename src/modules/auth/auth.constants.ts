@@ -2,8 +2,6 @@
 export const PASSWORD_MIN_LENGTH = 8;
 /** Generous for passphrases; bounds Argon2 input. */
 export const PASSWORD_MAX_LENGTH = 128;
-/** Mirrors the app's NAME_MAX_LENGTH. */
-export const DISPLAY_NAME_MAX_LENGTH = 50;
 /** RFC 5321 path limit. */
 export const EMAIL_MAX_LENGTH = 254;
 /** `ses_` + 16 + `.` + 43 = 64; anything much longer is not ours. */

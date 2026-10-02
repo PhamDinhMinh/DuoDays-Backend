@@ -114,6 +114,10 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestE
     bodyParser: false,
   });
   configureApp(app);
+  // autoIndex builds indexes in the background after startup; tests that depend on unique
+  // indexes (races, invariants) must not start before they exist.
+  const connection = app.get<Connection>(getConnectionToken());
+  await Promise.all(Object.values(connection.models).map(model => model.init()));
   // Listen on an ephemeral port so supertest reuses it instead of binding per request
   // (which leaks listeners under parallel requests).
   await app.listen(0, '127.0.0.1');
